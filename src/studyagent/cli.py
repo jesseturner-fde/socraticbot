@@ -14,6 +14,7 @@ import asyncio
 import logging
 import sys
 from typing import Optional
+
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -21,7 +22,7 @@ from rich.prompt import Prompt
 from rich.table import Table
 
 from studyagent.agent import SocraticStudyAgent
-from studyagent.memory import SessionManager, format_profile_for_prompt, load_user_profile
+from studyagent.memory import SessionManager, load_user_profile
 from studyagent.telemetry import TelemetryTracer
 
 logging.basicConfig(level=logging.ERROR)
@@ -133,7 +134,7 @@ async def run_chat_loop(
 ) -> None:
     """Executes the interactive terminal REPL."""
     session_manager = SessionManager()
-    tracer = TelemetryTracer.get_instance(trace_enabled=trace_enabled)
+    TelemetryTracer.get_instance(trace_enabled=trace_enabled)
     agent = SocraticStudyAgent(
         model_name=model_name,
         session_manager=session_manager,

@@ -1,7 +1,7 @@
 """Unit tests for agent orchestration, system instruction, and telemetry."""
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
+
 import pytest
 
 from studyagent.agent import SocraticStudyAgent, build_system_instruction
@@ -36,7 +36,7 @@ def test_agent_initialization(tmp_path):
 async def test_agent_mock_run(tmp_path):
     """Verify agent streaming and turn persistence using a mocked ADK runner."""
     sm = SessionManager(sessions_dir=tmp_path)
-    session = sm.new_session("mock_session")
+    sm.new_session("mock_session")
     agent = SocraticStudyAgent(session_manager=sm)
 
     # Mock runner's run_async generator

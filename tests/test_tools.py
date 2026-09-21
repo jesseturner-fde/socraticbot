@@ -1,14 +1,12 @@
 """Unit tests for studyagent tools."""
 
-from pathlib import Path
 from unittest.mock import patch
-import pytest
 
 from studyagent.tools import (
-    retrieve_paper_section,
-    web_search,
-    update_user_profile,
     record_concept_progress,
+    retrieve_paper_section,
+    update_user_profile,
+    web_search,
 )
 
 

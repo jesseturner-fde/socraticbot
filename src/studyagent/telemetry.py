@@ -9,9 +9,10 @@ from __future__ import annotations
 import functools
 import logging
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text

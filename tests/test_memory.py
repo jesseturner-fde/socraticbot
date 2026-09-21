@@ -1,8 +1,5 @@
 """Unit tests for memory and session management."""
 
-import json
-from pathlib import Path
-import pytest
 
 from studyagent.memory import (
     SessionManager,

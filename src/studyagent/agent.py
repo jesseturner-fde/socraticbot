@@ -14,9 +14,9 @@ import logging
 import os
 import time
 from typing import Any, AsyncGenerator, Dict, List, Optional
-from dotenv import load_dotenv
 
 import google.adk as adk
+from dotenv import load_dotenv
 from google.adk.runners import InMemoryRunner
 from google.genai import types
 
