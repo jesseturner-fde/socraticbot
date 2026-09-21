@@ -47,3 +47,6 @@ htmlcov/
 data/sessions/*.json
 !data/sessions/.gitkeep
 data/user_profile.json
+
+# Scratch files
+BUGS

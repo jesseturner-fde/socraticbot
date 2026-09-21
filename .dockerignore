@@ -1,0 +1,27 @@
+# Environment and secrets
+.env*
+
+# Python & virtual environment
+.venv/
+env/
+venv/
+__pycache__/
+*.py[cod]
+
+# Testing and caching
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local session transcripts and user profile
+data/sessions/*.json
+!data/sessions/.gitkeep
+data/user_profile.json
+
+# Git
+.git/
+.github/
+
+# Scratch files
+BUGS

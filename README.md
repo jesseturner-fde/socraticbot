@@ -1,8 +1,6 @@
 # Socratic Technical Study Agent 🎓
 
-> **AI in 5 Days Assessment Agent (Freestyle / Agents for Good - Education)**  
-> **Target Evaluation:** 95 / 95 Points across all 5 Course Rubric Criteria  
-> Built with **Google ADK 2.0** and **Gemini 2.5/3.5 Flash**
+> An active-recall AI research mentor powered by **Google ADK 2.0** and **Gemini Flash**.
 
 ---
 
@@ -20,15 +18,15 @@ The **Socratic Technical Study Agent** is a developer-focused, command-line conv
 
 ---
 
-## 2. Rubric Compliance Matrix (Target Score: 95 / 95)
+## 2. Key Capabilities & Core Architecture
 
-| Evaluation Criterion | Implementation Details | Target Score |
-| :--- | :--- | :---: |
-| **1. Tool & Interface Design** | • **4 Distinct Tools** with strict typing and schema: [`retrieve_paper_section`](src/studyagent/tools.py), [`web_search`](src/studyagent/tools.py), [`update_user_profile`](src/studyagent/tools.py), and [`record_concept_progress`](src/studyagent/tools.py).<br>• **Rich CLI Interface**: [`cli.py`](src/studyagent/cli.py) with colored Markdown, code syntax highlighting, past session browser, and graceful exit handling. | **Max** |
-| **2. Context & Memory** | • **Short-Term Memory**: Timestamped JSON session storage in `data/sessions/` retaining turn-by-turn dialogue and cross-session resumption.<br>• **Long-Term Memory**: Persistent `data/user_profile.json` tracking background, learning style, and concept mastery (0–100%) updated autonomously. | **Max** |
-| **3. Orchestration & Logic** | • **Google ADK 2.0** orchestration using `gemini-3.5-flash` / `gemini-2.5-flash`.<br>• Core Socratic Clarification Loop: Explains concept $\rightarrow$ retrieves paper grounded facts $\rightarrow$ generates targeted comprehension check $\rightarrow$ records diagnosed misconceptions. | **Max** |
-| **4. Observability & Tracing** | • Centralized [`telemetry.py`](src/studyagent/telemetry.py) recording execution latency, tool invocations, and token estimates.<br>• Real-time `--trace` CLI flag for live, transparent inspection of agent cognition during chat. | **Max** |
-| **5. Infrastructure & CI/CD** | • Public root GitHub repository structure.<br>• Automated [`.github/workflows/ci.yml`](.github/workflows/ci.yml) running `pytest` and `ruff` on every commit/PR.<br>• Deterministic unit test suite with mock LLM and search calls (runs 100% reliably in CI without API keys).<br>• Production-grade [`Dockerfile`](Dockerfile). | **Max** |
+| Capability Area | Implementation Details |
+| :--- | :--- |
+| **1. Tool & Interface Design** | • **4 Distinct Tools** with strict typing and schema: [`retrieve_paper_section`](src/studyagent/tools.py), [`web_search`](src/studyagent/tools.py), [`update_user_profile`](src/studyagent/tools.py), and [`record_concept_progress`](src/studyagent/tools.py).<br>• **Rich CLI Interface**: [`cli.py`](src/studyagent/cli.py) with colored Markdown, code syntax highlighting, past session browser, and graceful exit handling. |
+| **2. Context & Memory** | • **Short-Term Memory**: Timestamped JSON session storage in `data/sessions/` retaining turn-by-turn dialogue and cross-session resumption.<br>• **Long-Term Memory**: Persistent `data/user_profile.json` tracking background, learning style, and concept mastery (0–100%) updated autonomously. |
+| **3. Orchestration & Logic** | • **Google ADK 2.0** orchestration using `gemini-3.5-flash` / `gemini-2.5-flash`.<br>• Core Socratic Clarification Loop: Explains concept $\rightarrow$ retrieves paper grounded facts $\rightarrow$ generates targeted comprehension check $\rightarrow$ records diagnosed misconceptions. |
+| **4. Observability & Tracing** | • Centralized [`telemetry.py`](src/studyagent/telemetry.py) recording execution latency, tool invocations, and token estimates.<br>• Real-time `--trace` CLI flag for live, transparent inspection of agent cognition during chat. |
+| **5. Infrastructure & CI/CD** | • Public root GitHub repository structure.<br>• Automated [`.github/workflows/ci.yml`](.github/workflows/ci.yml) running `pytest` and `ruff` on every commit/PR.<br>• Deterministic unit test suite with mock LLM and search calls (runs 100% reliably in CI without API keys).<br>• Production-grade [`Dockerfile`](Dockerfile). |
 
 ---
 
@@ -82,8 +80,8 @@ flowchart TD
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/<user>/studyagent.git
-   cd studyagent
+   git clone https://github.com/jesseturner-fde/socraticbot.git
+   cd socraticbot
    ```
 
 2. **Create and activate a virtual environment:**
@@ -228,5 +226,4 @@ docker run -it --rm --env-file .env studyagent
 
 ## 9. License & Authors
 - **Authors**: Jesse Turner & Antigravity Pair-Programming Agent
-- **Course**: AI in 5 Days Assessment Agent (Google Course)
 - **License**: MIT
