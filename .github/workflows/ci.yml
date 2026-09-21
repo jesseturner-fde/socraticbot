@@ -34,6 +34,18 @@ jobs:
         run: |
           ruff check .
 
-      - name: Run Deterministic Unit Tests
+      - name: Run Deterministic Unit & Golden Regression Tests
         run: |
           pytest -v --tb=short
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
+
+      - name: Validate Terraform IaC
+        run: |
+          cd terraform
+          terraform fmt -check
+          terraform init -backend=false
+          terraform validate

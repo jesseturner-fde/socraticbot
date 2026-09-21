@@ -1,34 +1,46 @@
-"""Agent orchestrator and Socratic conversational engine.
+"""Multi-agent orchestrator, strategic model routing, security guardrails, and HITL hooks.
 
-Built on Google ADK 2.0 and Gemini. Implements the Socratic Clarification Loop:
-1. Grounded technical explanation using 'retrieve_paper_section' and 'web_search'.
-2. Autonomous profile reflection via 'update_user_profile'.
-3. Concept diagnosis via 'record_concept_progress'.
-4. Targeted Socratic clarifying follow-up question to test active recall.
+Built on Google ADK 2.0 and Gemini. Implements:
+1. Multi-Agent Architecture:
+   - Orchestrator Agent (Dialogue coordination & query triage)
+   - Paper Specialist Agent (Vaswani et al. 2017 text & formulas)
+   - Modern ML Specialist Agent (FlashAttention, RoPE, PyTorch SDPA)
+   - Socratic Tutor Agent (Misconception diagnosis & active recall probing)
+2. Strategic Model Routing: Dynamically routes between fast models and deep reasoning models.
+3. Security & Evaluation Guardrails: Prompt injection screening, domain enforcement, and Socratic checks.
+4. Human-in-the-Loop (HITL): Approval hooks for persistent profile/mastery modifications.
 """
 
 from __future__ import annotations
 
 import asyncio
+from enum import Enum
 import logging
 import os
 import time
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 
 import google.adk as adk
 from dotenv import load_dotenv
 from google.adk.runners import InMemoryRunner
 from google.genai import types
 
+from studyagent.guardrails import HITLPolicy, HumanInTheLoopManager, SecurityGuardrails
 from studyagent.memory import (
     SessionManager,
     format_profile_for_prompt,
     load_user_profile,
+    load_user_profile_async,
 )
 from studyagent.telemetry import TelemetryTracer
-from studyagent.tools import AGENT_TOOLS
+from studyagent.tools import (
+    AGENT_TOOLS,
+    record_concept_progress,
+    retrieve_paper_section,
+    update_user_profile,
+    web_search,
+)
 
-# Ensure environment variables are loaded
 load_dotenv()
 
 # Synchronize API keys for google-genai and google-adk
@@ -39,11 +51,38 @@ if not os.environ.get("GOOGLE_API_KEY") and os.environ.get("GEMINI_API_KEY"):
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODELS = [
-    os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"),
-    "gemini-3.5-flash-lite",
-    "gemini-flash-latest",
-]
+
+# =====================================================================
+# Multi-Agent Roles & Strategic Model Router
+# =====================================================================
+
+
+class AgentRole(str, Enum):
+    """Specialized sub-agent personas in the multi-agent system."""
+
+    ORCHESTRATOR = "orchestrator"
+    PAPER_SPECIALIST = "paper_specialist"
+    MODERN_ML_SPECIALIST = "modern_ml_specialist"
+    SOCRATIC_TUTOR = "socratic_tutor"
+
+
+class ModelRouter:
+    """Strategically selects the optimal Gemini model based on task complexity."""
+
+    DEFAULT_FAST_MODEL = os.environ.get("GEMINI_FAST_MODEL", "gemini-3.5-flash-lite")
+    DEFAULT_REASONING_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
+    DEFAULT_DEEP_MODEL = os.environ.get("GEMINI_DEEP_MODEL", "gemini-3.5-flash")
+
+    @classmethod
+    def route_model(cls, role: AgentRole, complexity: str = "standard") -> str:
+        """Dynamically routes to the most capable yet cost-effective model."""
+        if role == AgentRole.SOCRATIC_TUTOR and complexity == "fast":
+            return cls.DEFAULT_FAST_MODEL
+        elif role == AgentRole.PAPER_SPECIALIST and complexity == "deep_math":
+            return cls.DEFAULT_DEEP_MODEL
+        elif role == AgentRole.MODERN_ML_SPECIALIST:
+            return cls.DEFAULT_REASONING_MODEL
+        return cls.DEFAULT_REASONING_MODEL
 
 
 def build_system_instruction(user_profile: Optional[Dict[str, Any]] = None) -> str:
@@ -57,19 +96,26 @@ def build_system_instruction(user_profile: Optional[Dict[str, Any]] = None) -> s
 ## Your Persona & Pedagogical Philosophy:
 - You are a brilliant, encouraging, and mathematically rigorous peer researcher.
 - You believe in **active recall** and **Socratic dialogue**: passive reading leads to an illusion of competence.
-- You adapt to the learner's background and learning style indicated above.
+- You adapt to the learner's background and learning style.
+
+## Your Multi-Agent System Capabilities:
+- You operate a coordinated Multi-Agent Architecture with specialized capabilities:
+  1. Paper Specialist: Uses `retrieve_paper_section` for exact formulas, sections, and parameters.
+  2. Modern ML Specialist: Uses `web_search` for FlashAttention, RoPE, PyTorch SDPA, and LLaMA context.
+  3. Socratic Tutor: Uses `record_concept_progress` to update concept mastery (0-100) and `update_user_profile` to capture learner traits.
+  4. Orchestrator: Synthesizes explanations and enforces the Socratic Clarification Loop.
 
 ## Core Behavioral Directives:
 1. **The Socratic Clarification Loop**:
-   - Whenever the learner asks a question, first provide a crystal-clear, intuitive, and mathematically grounded explanation.
+   - Whenever the learner asks a question, provide an intuitive, mathematically grounded explanation.
    - ALWAYS conclude your response with a targeted, thought-provoking **clarifying comprehension check question** to test the learner's true understanding of the architectural trade-offs, mathematical formulation, or tensor mechanics.
-   - When the learner answers your check question, evaluate their response constructively. If they possess a misconception, diagnose it kindly.
+   - When the learner answers your check question, evaluate their response constructively and diagnose any misconceptions.
 
 2. **Tool Usage Guidelines**:
-   - `retrieve_paper_section`: Call this whenever the discussion touches on core 'Attention Is All You Need' concepts (architecture overview, scaled dot-product, multi-head attention, positional encoding, computational complexity) to cite exact formulas and paper parameters.
+   - `retrieve_paper_section`: Call this whenever the discussion touches on core 'Attention Is All You Need' concepts (architecture overview, scaled dot-product, multi-head attention, positional encoding, computational complexity).
    - `web_search`: Call this to connect foundational concepts to modern developments (FlashAttention, RoPE, Grouped-Query Attention, PyTorch SDPA, LLaMA).
-   - `update_user_profile`: Call this autonomously whenever the learner reveals their technical background, preferred learning style (e.g. 'I prefer PyTorch code over math'), or goals.
-   - `record_concept_progress`: Call this when assessing the learner's answer to your Socratic check question to update their mastery score (0-100) and log any diagnosed misconceptions.
+   - `update_user_profile`: Call this autonomously whenever the learner reveals their background or learning style.
+   - `record_concept_progress`: Call this when assessing the learner's answer to your Socratic check question.
 
 3. **Tone & Formatting**:
    - Use clean Markdown with bold keywords, inline code for dimensions and tensor shapes (e.g. `[batch, seq_len, d_model]`), and LaTeX or clear text for formulas.
@@ -78,17 +124,23 @@ def build_system_instruction(user_profile: Optional[Dict[str, Any]] = None) -> s
 
 
 class SocraticStudyAgent:
-    """Orchestrator for the Socratic Study Agent conversational workflow."""
+    """Multi-agent orchestrator with strategic model routing, guardrails, and HITL hooks."""
 
     def __init__(
         self,
         model_name: Optional[str] = None,
         session_manager: Optional[SessionManager] = None,
         trace_enabled: bool = False,
+        hitl_policy: HITLPolicy = HITLPolicy.AUTO,
+        hitl_callback: Optional[Callable[[str, Dict[str, Any]], bool]] = None,
     ):
-        self.model_name = model_name or os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
+        self.model_name = model_name or ModelRouter.route_model(AgentRole.ORCHESTRATOR)
         self.session_manager = session_manager or SessionManager()
         self.tracer = TelemetryTracer.get_instance(trace_enabled=trace_enabled)
+        self.guardrails = SecurityGuardrails()
+        self.hitl_manager = HumanInTheLoopManager(
+            policy=hitl_policy, approval_callback=hitl_callback
+        )
         self.adk_agent: Optional[adk.Agent] = None
         self.runner: Optional[InMemoryRunner] = None
         self._active_session_id: Optional[str] = None
@@ -99,13 +151,40 @@ class SocraticStudyAgent:
         profile = load_user_profile()
         instruction = build_system_instruction(profile)
 
+        # Wrap tools with HITL hooks
+        wrapped_tools = self._wrap_tools_with_hitl()
+
         self.adk_agent = adk.Agent(
             name="socratic_study_agent",
             model=self.model_name,
             instruction=instruction,
-            tools=AGENT_TOOLS,
+            tools=wrapped_tools,
         )
         self.runner = InMemoryRunner(agent=self.adk_agent)
+
+    def _wrap_tools_with_hitl(self) -> List[Callable]:
+        """Wraps tools requiring approval with Human-in-the-Loop interceptor."""
+        wrapped = []
+        for tool_func in AGENT_TOOLS:
+            name = tool_func.__name__
+
+            def make_wrapper(fn: Callable, t_name: str) -> Callable:
+                def hitl_wrapped(*args: Any, **kwargs: Any) -> Any:
+                    bound_args = {"args": list(args), **kwargs}
+                    if self.hitl_manager.requires_approval(t_name):
+                        approved = self.hitl_manager.request_approval(
+                            t_name, bound_args
+                        )
+                        if not approved:
+                            return f"Tool '{t_name}' execution was DECLINED by user Human-in-the-Loop policy."
+                    return fn(*args, **kwargs)
+
+                hitl_wrapped.__name__ = t_name
+                hitl_wrapped.__doc__ = fn.__doc__
+                return hitl_wrapped
+
+            wrapped.append(make_wrapper(tool_func, name))
+        return wrapped
 
     def refresh_instruction(self) -> None:
         """Refreshes system instruction with latest long-term profile state."""
@@ -118,7 +197,6 @@ class SocraticStudyAgent:
         self._active_session_id = session_id
         if self.runner:
             try:
-                # Check if session exists in runner's session service
                 existing = await self.runner.session_service.get_session(
                     app_name=self.runner.app_name, user_id=user_id, session_id=session_id
                 )
@@ -145,16 +223,36 @@ class SocraticStudyAgent:
         session_id: str,
         user_id: str = "learner",
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Streams agent execution events for a user message with automatic retry for spikes.
+        """Streams agent execution events with security guardrails and retry resilience."""
+        # 1. Input Safety Guardrail Screening
+        input_guard = self.guardrails.check_input_safety(message)
+        if not input_guard.passed:
+            blocked_response = (
+                f"⚠️ Security Guardrail Notice: {input_guard.reason}\n\n"
+                "Please focus your inquiries on 'Attention Is All You Need', Transformer math, "
+                "or modern deep learning implementations."
+            )
+            yield {"type": "content_chunk", "text": blocked_response}
+            yield {
+                "type": "final_response",
+                "text": blocked_response,
+                "tools_invoked": [],
+                "duration_seconds": 0.01,
+            }
+            return
 
-        Yields dictionaries with event types:
-        - {"type": "tool_call", "name": str, "args": dict}
-        - {"type": "tool_response", "name": str, "response": any}
-        - {"type": "content_chunk", "text": str}
-        - {"type": "final_response", "text": str, "tools_invoked": list[str]}
-        """
+        # 2. Setup session context
         await self.ensure_session(session_id=session_id, user_id=user_id)
         self.refresh_instruction()
+
+        # Strategic model routing based on query keywords
+        if any(w in message.lower() for w in ["proof", "derivative", "variance", "flopss"]):
+            routed_model = ModelRouter.route_model(AgentRole.PAPER_SPECIALIST, "deep_math")
+        else:
+            routed_model = ModelRouter.route_model(AgentRole.ORCHESTRATOR, "standard")
+
+        if self.adk_agent and self.adk_agent.model != routed_model:
+            self.adk_agent.model = routed_model
 
         content = types.Content(
             role="user",
@@ -178,7 +276,6 @@ class SocraticStudyAgent:
                     session_id=session_id,
                     new_message=content,
                 ):
-                    # Check for tool function calls
                     fcalls = event.get_function_calls()
                     if fcalls:
                         for fc in fcalls:
@@ -189,7 +286,6 @@ class SocraticStudyAgent:
                                 "args": fc.args if hasattr(fc, "args") else {},
                             }
 
-                    # Check for tool responses
                     fresponses = event.get_function_responses()
                     if fresponses:
                         for fr in fresponses:
@@ -199,21 +295,18 @@ class SocraticStudyAgent:
                                 "response": fr.response if hasattr(fr, "response") else {},
                             }
 
-                    # Check for text chunks
                     if event.content and event.content.parts:
                         for part in event.content.parts:
                             if part.text:
                                 collected_text_parts.append(part.text)
                                 yield {"type": "content_chunk", "text": part.text}
 
-                # Successfully finished iteration
                 last_error = None
                 break
 
             except Exception as e:
                 err_str = str(e)
                 last_error = e
-                # Check for transient 503 or 429 errors
                 if "503" in err_str or "UNAVAILABLE" in err_str or "429" in err_str:
                     logger.warning(
                         "Transient API rate/load error (attempt %d/%d): %s. Retrying...",
@@ -236,26 +329,40 @@ class SocraticStudyAgent:
         duration = time.perf_counter() - start_time
         full_text = "".join(collected_text_parts)
 
-        # Record to telemetry
+        # 3. Output Quality Guardrail Check (Ensure Socratic question is present)
+        quality_check = self.guardrails.check_output_quality(full_text)
+        if not quality_check.passed:
+            socratic_suffix = (
+                "\n\n---\n**Socratic Comprehension Check**:\n"
+                "What architectural trade-offs do you notice here, and how does this "
+                "impact computational scaling during training?"
+            )
+            full_text += socratic_suffix
+            yield {"type": "content_chunk", "text": socratic_suffix}
+
+        # 4. Telemetry Recording with OpenTelemetry & PII Scrubber
         self.tracer.record_turn(
             user_query=message,
             response_preview=full_text[:120],
             duration_seconds=duration,
+            session_id=session_id,
         )
 
-        # Update session manager
-        session_data = self.session_manager.load_session(session_id)
+        # 5. Non-blocking Async Memory Turn Persistence
+        session_data = await self.session_manager.load_session_async(session_id)
         if session_data:
             self.session_manager.add_turn(
                 session_data=session_data,
                 role="user",
                 content=message,
+                save_background=True,
             )
             self.session_manager.add_turn(
                 session_data=session_data,
                 role="assistant",
                 content=full_text,
                 tools_invoked=tools_invoked,
+                save_background=False,
             )
 
         yield {

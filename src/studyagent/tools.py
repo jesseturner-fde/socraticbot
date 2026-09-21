@@ -1,6 +1,7 @@
 """Tool ecosystem for the Socratic Technical Study Agent.
 
-Implements the 4 core tools:
+Implements the 4 core tools with strict Pydantic schemas, input validation,
+guided error handling, and OpenTelemetry-ready telemetry:
 1. retrieve_paper_section: Verified citations and formulas from 'Attention Is All You Need'.
 2. web_search: Google Discovery Engine MCP / contemporary ML search with robust offline fallback.
 3. update_user_profile: Autonomous reflection tool for learner background and learning style.
@@ -9,13 +10,15 @@ Implements the 4 core tools:
 
 from __future__ import annotations
 
+from enum import Enum
 import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from studyagent.memory import (
     DEFAULT_DATA_DIR,
@@ -30,6 +33,163 @@ PAPER_PATH = DEFAULT_DATA_DIR / "attention_paper.json"
 
 # Cached paper concepts
 _CACHED_PAPER_DATA: Optional[Dict[str, Any]] = None
+
+
+# =====================================================================
+# Pydantic Schemas for Strict Input & Output Validation
+# =====================================================================
+
+
+class TopicKeyEnum(str, Enum):
+    """Allowed foundational concepts in 'Attention Is All You Need'."""
+
+    ARCHITECTURE_OVERVIEW = "architecture_overview"
+    SCALED_DOT_PRODUCT = "scaled_dot_product"
+    MULTI_HEAD_ATTENTION = "multi_head_attention"
+    POSITIONAL_ENCODING = "positional_encoding"
+    COMPUTATIONAL_COMPLEXITY = "computational_complexity"
+
+
+class TraitCategoryEnum(str, Enum):
+    """Allowed categories for learner persona traits."""
+
+    BACKGROUND = "background"
+    LEARNING_STYLE = "learning_style"
+    PERSONALITY_TONE = "personality_tone"
+
+
+class RetrievePaperSectionInput(BaseModel):
+    """Input schema for retrieving a section from Attention Is All You Need."""
+
+    topic_key: str = Field(
+        ...,
+        description=(
+            "Foundational Transformer concept to retrieve. Must be one of: "
+            "'architecture_overview', 'scaled_dot_product', 'multi_head_attention', "
+            "'positional_encoding', 'computational_complexity'."
+        ),
+        min_length=2,
+        max_length=100,
+    )
+
+    @field_validator("topic_key")
+    @classmethod
+    def normalize_topic_key(cls, v: str) -> str:
+        clean = v.strip().lower().replace("-", "_").replace(" ", "_")
+        return clean
+
+
+class WebSearchInput(BaseModel):
+    """Input schema for technical web search."""
+
+    query: str = Field(
+        ...,
+        description="Technical search query keywords (e.g., 'FlashAttention memory complexity', 'PyTorch SDPA', 'RoPE vs sinusoidal').",
+        min_length=2,
+        max_length=500,
+    )
+
+
+class UpdateUserProfileInput(BaseModel):
+    """Input schema for updating learner persona in long-term memory."""
+
+    trait_category: TraitCategoryEnum = Field(
+        ...,
+        description="Category of the discovered learner trait: 'background', 'learning_style', or 'personality_tone'.",
+    )
+    detail: str = Field(
+        ...,
+        description="Specific description of the newly discovered trait, preference, or experience level.",
+        min_length=3,
+        max_length=1000,
+    )
+
+
+class RecordConceptProgressInput(BaseModel):
+    """Input schema for recording mastery scores and misconceptions."""
+
+    concept_key: str = Field(
+        ...,
+        description="Concept identifier being evaluated (e.g., 'scaled_dot_product', 'multi_head_attention').",
+        min_length=2,
+        max_length=100,
+    )
+    score: int = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="Estimated understanding score from 0 (unseen) to 100 (mastered).",
+    )
+    notes: str = Field(
+        default="",
+        description="Diagnostic notes explaining the learner's understanding or specific misconceptions.",
+        max_length=500,
+    )
+
+
+class PaperSectionOutput(BaseModel):
+    """Output schema for paper section retrieval."""
+
+    topic_key: str
+    title: str
+    paper_section: str
+    summary: str
+    key_points: List[str]
+    formulas: List[str]
+    architectural_parameters: Dict[str, Any]
+
+
+class WebSearchOutput(BaseModel):
+    """Output schema for technical web search."""
+
+    query: str
+    results_markdown: str
+    source: str
+
+
+class ProfileUpdateOutput(BaseModel):
+    """Output schema for user profile updates."""
+
+    trait_category: str
+    detail: str
+    status: str
+    message: str
+
+
+class ConceptProgressOutput(BaseModel):
+    """Output schema for concept mastery updates."""
+
+    concept_key: str
+    score: int
+    status: str
+    notes: str
+    message: str
+
+
+def get_tools_json_schemas() -> Dict[str, Dict[str, Any]]:
+    """Returns explicit JSON Schemas for all agent tools for strict LLM constraint."""
+    return {
+        "retrieve_paper_section": {
+            "name": "retrieve_paper_section",
+            "description": retrieve_paper_section.__doc__,
+            "parameters": RetrievePaperSectionInput.model_json_schema(),
+        },
+        "web_search": {
+            "name": "web_search",
+            "description": web_search.__doc__,
+            "parameters": WebSearchInput.model_json_schema(),
+        },
+        "update_user_profile": {
+            "name": "update_user_profile",
+            "description": update_user_profile.__doc__,
+            "parameters": UpdateUserProfileInput.model_json_schema(),
+        },
+        "record_concept_progress": {
+            "name": "record_concept_progress",
+            "description": record_concept_progress.__doc__,
+            "parameters": RecordConceptProgressInput.model_json_schema(),
+        },
+    }
 
 
 def _get_paper_data(paper_file: Optional[Path | str] = None) -> Dict[str, Any]:
@@ -50,6 +210,11 @@ def _get_paper_data(paper_file: Optional[Path | str] = None) -> Dict[str, Any]:
         return data
 
 
+# =====================================================================
+# Tool Implementations
+# =====================================================================
+
+
 @trace_tool("retrieve_paper_section")
 def retrieve_paper_section(topic_key: str) -> Dict[str, Any]:
     """Retrieves verified text excerpts, mathematical formulas, and section numbers
@@ -68,10 +233,20 @@ def retrieve_paper_section(topic_key: str) -> Dict[str, Any]:
         A dictionary containing the title, paper section, summary, key points,
         mathematical formulas, and architectural parameters.
     """
+    # Strict Pydantic validation of input
+    try:
+        validated = RetrievePaperSectionInput.model_validate({"topic_key": topic_key})
+        cleaned_key = validated.topic_key
+    except ValidationError as err:
+        return {
+            "error": "Validation failed for topic_key parameter.",
+            "details": err.errors(),
+            "valid_topics": [e.value for e in TopicKeyEnum],
+            "suggestion": "Please supply a valid topic_key string such as 'scaled_dot_product'.",
+        }
+
     data = _get_paper_data()
     concepts = data.get("concepts", {})
-
-    cleaned_key = topic_key.strip().lower().replace("-", "_").replace(" ", "_")
 
     # Direct match
     if cleaned_key in concepts:
@@ -105,7 +280,7 @@ def retrieve_paper_section(topic_key: str) -> Dict[str, Any]:
 
     return {
         "error": f"Topic '{topic_key}' not found in 'Attention Is All You Need' dataset.",
-        "available_topics": list(concepts.keys()),
+        "available_topics": [e.value for e in TopicKeyEnum],
         "suggestion": "Please specify one of: architecture_overview, scaled_dot_product, multi_head_attention, positional_encoding, computational_complexity",
     }
 
@@ -219,11 +394,20 @@ def web_search(query: str) -> str:
     Returns:
         Structured search results with paper titles, authors, architectural trade-offs, and citations.
     """
-    clean_query = query.strip().lower()
+    # Strict Pydantic validation
+    try:
+        validated = WebSearchInput.model_validate({"query": query})
+        clean_query = validated.query.strip().lower()
+    except ValidationError as err:
+        return f"Error: Web search validation failed: {err.errors()}"
 
     # 1. Attempt live Google Discovery Engine MCP / API if configured
-    endpoint = os.environ.get("DISCOVERY_ENGINE_ENDPOINT", "https://discoveryengine.googleapis.com/mcp")
-    gcp_token = os.environ.get("GOOGLE_CLOUD_ACCESS_TOKEN") or os.environ.get("DISCOVERY_ENGINE_API_KEY")
+    endpoint = os.environ.get(
+        "DISCOVERY_ENGINE_ENDPOINT", "https://discoveryengine.googleapis.com/mcp"
+    )
+    gcp_token = os.environ.get("GOOGLE_CLOUD_ACCESS_TOKEN") or os.environ.get(
+        "DISCOVERY_ENGINE_API_KEY"
+    )
 
     if gcp_token:
         try:
@@ -245,7 +429,9 @@ def web_search(query: str) -> str:
                     if result_text:
                         return f"[Google Discovery Engine MCP Result]\n{result_text}"
         except Exception as e:
-            logger.debug("Google Discovery Engine MCP query failed: %s. Using internal index.", e)
+            logger.debug(
+                "Google Discovery Engine MCP query failed: %s. Using internal index.", e
+            )
 
     # 2. Check curated modern ML knowledge base
     matched_entries = []
@@ -257,11 +443,25 @@ def web_search(query: str) -> str:
     if not matched_entries:
         if "flash" in clean_query or "io" in clean_query or "sram" in clean_query:
             matched_entries.append(CURATED_MODERN_ML_KNOWLEDGE["flashattention"])
-        if "rope" in clean_query or "rotary" in clean_query or "relative position" in clean_query:
+        if (
+            "rope" in clean_query
+            or "rotary" in clean_query
+            or "relative position" in clean_query
+        ):
             matched_entries.append(CURATED_MODERN_ML_KNOWLEDGE["rope"])
-        if "group" in clean_query or "gqa" in clean_query or "mqa" in clean_query or "cache" in clean_query:
+        if (
+            "group" in clean_query
+            or "gqa" in clean_query
+            or "mqa" in clean_query
+            or "cache" in clean_query
+        ):
             matched_entries.append(CURATED_MODERN_ML_KNOWLEDGE["gqa"])
-        if "pytorch" in clean_query or "sdpa" in clean_query or "implementation" in clean_query or "code" in clean_query:
+        if (
+            "pytorch" in clean_query
+            or "sdpa" in clean_query
+            or "implementation" in clean_query
+            or "code" in clean_query
+        ):
             matched_entries.append(CURATED_MODERN_ML_KNOWLEDGE["pytorch"])
         if "llama" in clean_query or "rmsnorm" in clean_query or "swiglu" in clean_query:
             matched_entries.append(CURATED_MODERN_ML_KNOWLEDGE["llama"])
@@ -302,7 +502,19 @@ def update_user_profile(trait_category: str, detail: str) -> str:
     Returns:
         Confirmation message that the learner's long-term profile was updated.
     """
-    return update_profile_trait(trait_category=trait_category, detail=detail)
+    # Strict Pydantic validation
+    try:
+        # If passed as string, cast/validate to enum
+        validated = UpdateUserProfileInput(
+            trait_category=TraitCategoryEnum(trait_category.strip().lower()),
+            detail=detail,
+        )
+    except (ValidationError, ValueError) as err:
+        return f"Error: User profile update validation failed: {err}"
+
+    return update_profile_trait(
+        trait_category=validated.trait_category.value, detail=validated.detail
+    )
 
 
 @trace_tool("record_concept_progress")
@@ -319,7 +531,19 @@ def record_concept_progress(concept_key: str, score: int, notes: str = "") -> st
     Returns:
         Confirmation message that progress was recorded in long-term memory.
     """
-    return record_concept_mastery(concept_key=concept_key, score=score, notes=notes)
+    # Strict Pydantic validation
+    try:
+        validated = RecordConceptProgressInput(
+            concept_key=concept_key, score=score, notes=notes
+        )
+    except ValidationError as err:
+        return f"Error: Concept progress validation failed: {err.errors()}"
+
+    return record_concept_mastery(
+        concept_key=validated.concept_key,
+        score=validated.score,
+        notes=validated.notes,
+    )
 
 
 # List of tools to pass into the Google ADK Agent

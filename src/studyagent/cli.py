@@ -13,7 +13,7 @@ import argparse
 import asyncio
 import logging
 import sys
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -22,6 +22,7 @@ from rich.prompt import Prompt
 from rich.table import Table
 
 from studyagent.agent import SocraticStudyAgent
+from studyagent.guardrails import HITLPolicy
 from studyagent.memory import SessionManager, load_user_profile
 from studyagent.telemetry import TelemetryTracer
 
@@ -131,14 +132,26 @@ async def run_chat_loop(
     session_id: str,
     model_name: Optional[str] = None,
     trace_enabled: bool = False,
+    hitl_policy: HITLPolicy = HITLPolicy.AUTO,
 ) -> None:
     """Executes the interactive terminal REPL."""
     session_manager = SessionManager()
     TelemetryTracer.get_instance(trace_enabled=trace_enabled)
+
+    def cli_hitl_approval(tool_name: str, arguments: Dict[str, Any]) -> bool:
+        console.print(
+            f"\n[bold yellow]⚠️ Human-in-the-Loop Confirmation[/bold yellow]: "
+            f"Agent requests execution of tool [bold cyan]{tool_name}[/bold cyan] with args {arguments}."
+        )
+        choice = Prompt.ask("Approve execution?", choices=["y", "n"], default="y")
+        return choice.lower() == "y"
+
     agent = SocraticStudyAgent(
         model_name=model_name,
         session_manager=session_manager,
         trace_enabled=trace_enabled,
+        hitl_policy=hitl_policy,
+        hitl_callback=cli_hitl_approval,
     )
 
     # If resuming a session with past turns, print a welcoming recap
@@ -237,6 +250,13 @@ def main() -> None:
         help="Override Gemini model name (default: gemini-3.5-flash)",
     )
     parser.add_argument(
+        "--hitl",
+        type=str,
+        default="auto",
+        choices=["auto", "confirm_critical", "confirm_all"],
+        help="Human-in-the-Loop policy: auto, confirm_critical (confirm memory mutations), or confirm_all",
+    )
+    parser.add_argument(
         "--profile",
         action="store_true",
         help="Display current user profile and mastery progress, then exit",
@@ -267,6 +287,7 @@ def main() -> None:
                 session_id=session_id,
                 model_name=args.model,
                 trace_enabled=args.trace,
+                hitl_policy=HITLPolicy(args.hitl),
             )
         )
     except (KeyboardInterrupt, EOFError, SystemExit):

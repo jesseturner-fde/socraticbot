@@ -1,0 +1,8 @@
+project_id      = "my-gcp-project-id"
+region          = "us-central1"
+app_name        = "socratic-study-agent"
+environment     = "production"
+container_image = "us-central1-docker.pkg.dev/my-gcp-project-id/socratic-study-agent-repo/agent:v1.0.0"
+gemini_model    = "gemini-3.5-flash"
+min_instances   = 0
+max_instances   = 5
