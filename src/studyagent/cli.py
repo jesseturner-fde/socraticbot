@@ -97,10 +97,14 @@ def prompt_session_choice(session_manager: SessionManager) -> str:
     if len(sessions) > 1:
         console.print(f" [bold green]3-{min(len(sessions), 5)}[/bold green] Select specific past session")
 
-    choice = Prompt.ask(
-        "\n[bold yellow]Your choice[/bold yellow]",
-        default="1",
-    ).strip()
+    try:
+        choice = Prompt.ask(
+            "\n[bold yellow]Your choice[/bold yellow]",
+            default="1",
+        ).strip()
+    except (KeyboardInterrupt, EOFError):
+        console.print("\n[yellow]Selection cancelled. Goodbye![/yellow]")
+        sys.exit(0)
 
     if choice == "2":
         new_sess = session_manager.new_session()
@@ -247,16 +251,16 @@ def main() -> None:
 
     session_manager = SessionManager()
 
-    if args.session:
-        session_id = args.session
-    elif args.new:
-        new_sess = session_manager.new_session()
-        session_id = new_sess["session_id"]
-        console.print(f"[green]✓ Started new study session: [bold]{session_id}[/bold][/green]\n")
-    else:
-        session_id = prompt_session_choice(session_manager)
-
     try:
+        if args.session:
+            session_id = args.session
+        elif args.new:
+            new_sess = session_manager.new_session()
+            session_id = new_sess["session_id"]
+            console.print(f"[green]✓ Started new study session: [bold]{session_id}[/bold][/green]\n")
+        else:
+            session_id = prompt_session_choice(session_manager)
+
         asyncio.run(
             run_chat_loop(
                 session_id=session_id,
@@ -264,8 +268,8 @@ def main() -> None:
                 trace_enabled=args.trace,
             )
         )
-    except (KeyboardInterrupt, SystemExit):
-        console.print("\n[dim]Session terminated.[/dim]")
+    except (KeyboardInterrupt, EOFError, SystemExit):
+        console.print("\n[dim]Session terminated. Goodbye![/dim]")
 
 
 if __name__ == "__main__":
