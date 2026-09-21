@@ -1,0 +1,34 @@
+{
+  "user_persona": {
+    "background": "Software engineer studying modern deep learning architectures",
+    "learning_style": "Prefers concrete tensor shapes and code examples over abstract equations; Values minimal PyTorch snippets",
+    "personality_tone": "Curious, pragmatic, focused on real-world implementation trade-offs"
+  },
+  "concept_mastery": {
+    "architecture_overview": {
+      "score": 0,
+      "status": "unseen",
+      "misconceptions": []
+    },
+    "scaled_dot_product": {
+      "score": 0,
+      "status": "unseen",
+      "misconceptions": []
+    },
+    "multi_head_attention": {
+      "score": 0,
+      "status": "unseen",
+      "misconceptions": []
+    },
+    "positional_encoding": {
+      "score": 0,
+      "status": "unseen",
+      "misconceptions": []
+    },
+    "computational_complexity": {
+      "score": 0,
+      "status": "unseen",
+      "misconceptions": []
+    }
+  }
+}

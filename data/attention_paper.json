@@ -1,0 +1,126 @@
+{
+  "paper_title": "Attention Is All You Need",
+  "authors": [
+    "Ashish Vaswani",
+    "Noam Shazeer",
+    "Niki Parmar",
+    "Jakob Uszkoreit",
+    "Llion Jones",
+    "Aidan N. Gomez",
+    "Lukasz Kaiser",
+    "Illia Polosukhin"
+  ],
+  "year": 2017,
+  "arxiv_id": "1706.03762",
+  "concepts": {
+    "architecture_overview": {
+      "topic_key": "architecture_overview",
+      "title": "Model Architecture & Encoder-Decoder Stack",
+      "paper_section": "Section 3 & Section 3.1",
+      "summary": "The Transformer follows an encoder-decoder architecture using stacked self-attention and point-wise, fully connected layers instead of recurrence or convolutions.",
+      "key_points": [
+        "Encoder: Composed of a stack of N = 6 identical layers. Each layer has two sub-layers: multi-head self-attention and a position-wise fully connected feed-forward network.",
+        "Decoder: Composed of a stack of N = 6 identical layers with a third sub-layer that performs multi-head attention over the output of the encoder stack.",
+        "Residual Connections: Around each of the sub-layers, employing LayerNorm(x + Sublayer(x)).",
+        "Dimensionality: All sub-layers and embedding layers produce outputs of dimension d_model = 512.",
+        "Feed-Forward Networks: Inner-layer dimensionality d_ff = 2048 with ReLU activation between two linear transformations: FFN(x) = max(0, x W_1 + b_1) W_2 + b_2."
+      ],
+      "formulas": [
+        "LayerNorm(x + Sublayer(x))",
+        "FFN(x) = max(0, x W_1 + b_1) W_2 + b_2"
+      ],
+      "architectural_parameters": {
+        "N": 6,
+        "d_model": 512,
+        "d_ff": 2048,
+        "h": 8,
+        "dropout": 0.1
+      }
+    },
+    "scaled_dot_product": {
+      "topic_key": "scaled_dot_product",
+      "title": "Scaled Dot-Product Attention",
+      "paper_section": "Section 3.2.1",
+      "summary": "Attention function mapping queries and keys of dimension d_k and values of dimension d_v to an output via scaled dot products and softmax normalization.",
+      "key_points": [
+        "Computes the dot products of the query with all keys, divides each by sqrt(d_k), and applies a softmax function to obtain weights on the values.",
+        "Scaling Factor Intuition: For large values of d_k, the dot products grow large in magnitude, pushing the softmax function into regions with extremely small gradients (softmax saturation / vanishing gradient problem). Dividing by sqrt(d_k) counteracts this growth by maintaining unit variance under assumption of independent zero-mean unit-variance components.",
+        "Dot-product vs Additive Attention: Dot-product attention is much faster and more space-efficient in practice because it can be implemented using highly optimized matrix multiplication code."
+      ],
+      "formulas": [
+        "Attention(Q, K, V) = softmax((Q * K^T) / sqrt(d_k)) * V"
+      ],
+      "architectural_parameters": {
+        "d_k": 64,
+        "scaling_factor": "1 / sqrt(d_k) = 1 / sqrt(64) = 0.125"
+      }
+    },
+    "multi_head_attention": {
+      "topic_key": "multi_head_attention",
+      "title": "Multi-Head Attention",
+      "paper_section": "Section 3.2.2",
+      "summary": "Instead of performing a single attention function with d_model-dimensional keys, values and queries, linearly projects queries, keys and values h times with different learned linear projections to d_k, d_k and d_v dimensions respectively.",
+      "key_points": [
+        "Allows the model to jointly attend to information from different representation subspaces at different positions. A single attention head averages these subspaces, inhibiting this capability.",
+        "Total computational cost is similar to single-head attention with full dimensionality because d_k = d_v = d_model / h = 64 with h = 8.",
+        "Three distinct attention usages: (1) Encoder self-attention where Q, K, V come from previous layer; (2) Decoder self-attention where each position can only attend to earlier positions (masked attention); (3) Decoder-encoder cross-attention where Q comes from decoder and K, V come from encoder."
+      ],
+      "formulas": [
+        "MultiHead(Q, K, V) = Concat(head_1, ..., head_h) * W^O",
+        "where head_i = Attention(Q * W_i^Q, K * W_i^K, V * W_i^V)",
+        "Projection dimensions: W_i^Q in R^(d_model x d_k), W_i^K in R^(d_model x d_k), W_i^V in R^(d_model x d_v), W^O in R^(h*d_v x d_model)"
+      ],
+      "architectural_parameters": {
+        "h": 8,
+        "d_model": 512,
+        "d_k": 64,
+        "d_v": 64
+      }
+    },
+    "positional_encoding": {
+      "topic_key": "positional_encoding",
+      "title": "Positional Encoding",
+      "paper_section": "Section 3.5",
+      "summary": "In order for the model to make use of sequence order without recurrence or convolution, positional encodings are injected into the input embeddings.",
+      "key_points": [
+        "Added to input embeddings at the bottoms of encoder and decoder stacks, having the same dimension d_model = 512 so the two can be summed.",
+        "Uses sine and cosine functions of different frequencies: wavelengths form a geometric progression from 2*pi to 10000*2*pi.",
+        "Mathematical Intuition: For any fixed offset k, PE_(pos+k) can be represented as a linear function of PE_pos using trigonometric angle sum identities: cos(a+b) = cos(a)cos(b) - sin(a)sin(b) and sin(a+b) = sin(a)cos(b) + cos(a)sin(b). This facilitates learning relative positions.",
+        "Extrapolation: The authors chose sinusoidal encodings because it may allow the model to extrapolate to sequence lengths longer than those encountered during training."
+      ],
+      "formulas": [
+        "PE(pos, 2i)   = sin(pos / 10000^(2i / d_model))",
+        "PE(pos, 2i+1) = cos(pos / 10000^(2i / d_model))",
+        "where pos is token position and i is the dimension index (0 <= i < d_model/2)"
+      ],
+      "architectural_parameters": {
+        "base_wavelength_constant": 10000,
+        "dimension": 512
+      }
+    },
+    "computational_complexity": {
+      "topic_key": "computational_complexity",
+      "title": "Self-Attention vs Recurrent and Convolutional Layers",
+      "paper_section": "Section 4 & Table 1",
+      "summary": "Comparison of self-attention layers to recurrent and convolutional layers across total computational complexity per layer, parallelizability, and path length for long-range dependencies.",
+      "key_points": [
+        "Self-Attention: Complexity per layer is O(n^2 * d), sequential operations O(1), maximum path length O(1).",
+        "Recurrent Layer: Complexity per layer is O(n * d^2), sequential operations O(n), maximum path length O(n).",
+        "Convolutional Layer: Complexity per layer is O(k * n * d^2), sequential operations O(1), maximum path length O(log_k(n)) with dilated convolutions.",
+        "Key trade-off: When sequence length n is smaller than representation dimension d (common in NLP tasks where e.g. n=512, d=512 or d=1024), self-attention layer is computationally faster than recurrent layers.",
+        "Path length: Shorter path length O(1) makes it much easier to learn long-range dependencies because gradient signals do not need to traverse numerous sequential steps."
+      ],
+      "formulas": [
+        "Table 1 Comparison: Layer Type | Complexity per Layer | Sequential Operations | Maximum Path Length",
+        "Self-Attention:    O(n^2 * d)   | O(1) | O(1)",
+        "Recurrent:         O(n * d^2)   | O(n) | O(n)",
+        "Convolutional:     O(k * n * d^2) | O(1) | O(log_k(n))"
+      ],
+      "architectural_parameters": {
+        "n": "sequence length",
+        "d": "representation dimension",
+        "k": "kernel size of convolution"
+      }
+    }
+  }
+}
