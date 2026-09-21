@@ -1,0 +1,7 @@
+# Bug Tracking & Resolution Log
+
+## 1. [RESOLVED] KeyboardInterrupt on Startup Session Selection
+- **Reported**: Pressing `Ctrl+C` at the `Your choice (1):` prompt produced an unhandled `KeyboardInterrupt` traceback from `Prompt.ask()`.
+- **Root Cause**: `prompt_session_choice()` was invoked before the main chat loop's `try/except` block and did not intercept `KeyboardInterrupt` or `EOFError`.
+- **Resolution**: Wrapped `Prompt.ask()` in `prompt_session_choice()` with `try...except (KeyboardInterrupt, EOFError)` and enclosed all startup initialization in `main()` with top-level graceful exit handlers.
+- **Verification**: Verified with automated subprocess tests; exits cleanly with code 0 and friendly exit message.
