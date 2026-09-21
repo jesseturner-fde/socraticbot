@@ -30,37 +30,37 @@ The **Socratic Technical Study Agent** is a developer-focused, command-line conv
 
 ```mermaid
 flowchart TD
-    User([Learner]) <-->|Natural Conversational Chat| CLI[Rich Terminal CLI Interface]
+    User([Learner]) ---|"Natural Conversational Chat"| CLI["Rich Terminal CLI Interface"]
     
-    subgraph UI_Layer [Interface & Session Lifecycle]
-        CLI --> SessionManager[Session Manager / History Menu]
-        SessionManager -->|Resume or New| ActiveSession[Active Session Context]
+    subgraph UI_Layer ["Interface & Session Lifecycle"]
+        CLI --> SessionManager["Session Manager / History Menu"]
+        SessionManager -->|Resume or New| ActiveSession["Active Session Context"]
     end
     
-    subgraph Orchestrator [Google ADK 2.0 Agent Engine]
-        ActiveSession <--> Agent[Socratic Study Agent]
-        Agent --> PromptEngine[Prompt & Persona Engine]
-        PromptEngine -.->|Injects Long-Term Persona| UserProfile
-        PromptEngine -.->|Injects Short-Term Turns| ActiveSession
+    subgraph Orchestrator ["Google ADK 2.0 Agent Engine"]
+        ActiveSession --- Agent["Socratic Study Agent"]
+        Agent --> PromptEngine["Prompt & Persona Engine"]
+        PromptEngine -.->|"Injects Long-Term Persona"| UserProfile
+        PromptEngine -.->|"Injects Short-Term Turns"| ActiveSession
     end
     
-    subgraph Tool_Ecosystem [Agent Tools]
-        Agent <--> ToolPaper[retrieve_paper_section]
-        Agent <--> ToolSearch[web_search]
-        Agent <--> ToolProfile[update_user_profile]
-        Agent <--> ToolProgress[record_concept_progress]
+    subgraph Tool_Ecosystem ["Agent Tools"]
+        Agent --- ToolPaper["retrieve_paper_section"]
+        Agent --- ToolSearch["web_search"]
+        Agent --- ToolProfile["update_user_profile"]
+        Agent --- ToolProgress["record_concept_progress"]
     end
     
-    subgraph Storage_Layer [Persistence Layer]
-        ToolPaper --- PaperData[(data/attention_paper.json)]
-        ToolProfile --> UserProfile[(data/user_profile.json)]
+    subgraph Storage_Layer ["Persistence Layer"]
+        ToolPaper --- PaperData[("data/attention_paper.json")]
+        ToolProfile --> UserProfile[("data/user_profile.json")]
         ToolProgress --> UserProfile
-        ActiveSession --> SessionLogs[(data/sessions/session_<timestamp>.json)]
+        ActiveSession --> SessionLogs[("data/sessions/session_*.json")]
     end
     
-    subgraph Observability_Layer [Telemetry & Tracing]
-        Agent -.-> Telemetry[Telemetry Logger & Trace Hook]
-        Telemetry -.->|Real-time Output via --trace| CLI
+    subgraph Observability_Layer ["Telemetry & Tracing"]
+        Agent -.-> Telemetry["Telemetry Logger & Trace Hook"]
+        Telemetry -.->|"Real-time Output via --trace"| CLI
     end
 ```
 

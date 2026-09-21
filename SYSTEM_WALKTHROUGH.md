@@ -29,37 +29,37 @@ The **Socratic Technical Study Agent** solves this through a continuous **Active
 
 ```mermaid
 flowchart TD
-    User([Learner]) <-->|Terminal Chat / CLI| CLI[Rich Terminal Interface: src/studyagent/cli.py]
+    User([Learner]) ---|"Terminal Chat / CLI"| CLI["Rich Terminal Interface: src/studyagent/cli.py"]
     
-    subgraph UI_And_Lifecycle [Interface & Session Lifecycle]
-        CLI --> SessionManager[SessionManager: src/studyagent/memory.py]
-        SessionManager -->|Resume or New| ActiveSession[Active Session Context]
+    subgraph UI_And_Lifecycle ["Interface & Session Lifecycle"]
+        CLI --> SessionManager["SessionManager: src/studyagent/memory.py"]
+        SessionManager -->|Resume or New| ActiveSession["Active Session Context"]
     end
     
-    subgraph Engine [Google ADK 2.0 Orchestrator]
-        ActiveSession <--> Agent[SocraticStudyAgent: src/studyagent/agent.py]
-        Agent --> PromptEngine[Dynamic System Instruction]
-        PromptEngine -.->|Injects Long-Term Persona| UserProfile
-        PromptEngine -.->|Injects Short-Term History| ActiveSession
+    subgraph Engine ["Google ADK 2.0 Orchestrator"]
+        ActiveSession --- Agent["SocraticStudyAgent: src/studyagent/agent.py"]
+        Agent --> PromptEngine["Dynamic System Instruction"]
+        PromptEngine -.->|"Injects Long-Term Persona"| UserProfile
+        PromptEngine -.->|"Injects Short-Term History"| ActiveSession
     end
     
-    subgraph Tools [4-Tool Ecosystem: src/studyagent/tools.py]
-        Agent <--> ToolPaper[retrieve_paper_section]
-        Agent <--> ToolSearch[web_search]
-        Agent <--> ToolProfile[update_user_profile]
-        Agent <--> ToolProgress[record_concept_progress]
+    subgraph Tools ["4-Tool Ecosystem: src/studyagent/tools.py"]
+        Agent --- ToolPaper["retrieve_paper_section"]
+        Agent --- ToolSearch["web_search"]
+        Agent --- ToolProfile["update_user_profile"]
+        Agent --- ToolProgress["record_concept_progress"]
     end
     
-    subgraph Storage [Persistent Storage: data/]
-        ToolPaper --- PaperData[(data/attention_paper.json)]
-        ToolProfile --> UserProfile[(data/user_profile.json)]
+    subgraph Storage ["Persistent Storage: data/"]
+        ToolPaper --- PaperData[("data/attention_paper.json")]
+        ToolProfile --> UserProfile[("data/user_profile.json")]
         ToolProgress --> UserProfile
-        ActiveSession --> SessionLogs[(data/sessions/session_*.json)]
+        ActiveSession --> SessionLogs[("data/sessions/session_*.json")]
     end
     
-    subgraph Telemetry_Layer [Observability: src/studyagent/telemetry.py]
-        Agent -.-> TelemetryTracer[Telemetry Logger & Tracing]
-        TelemetryTracer -.->|Live Panels via --trace| CLI
+    subgraph Telemetry_Layer ["Observability: src/studyagent/telemetry.py"]
+        Agent -.-> TelemetryTracer["Telemetry Logger & Tracing"]
+        TelemetryTracer -.->|"Live Panels via --trace"| CLI
     end
 ```
 

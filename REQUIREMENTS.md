@@ -30,24 +30,24 @@
 
 ```mermaid
 flowchart TD
-    Start([Launch CLI: python -m studyagent.cli]) --> ShowSessions[Display Past Sessions History]
-    ShowSessions --> SessionChoice{Start Fresh or Resume?}
+    Start(["Launch CLI: python -m studyagent.cli"]) --> ShowSessions["Display Past Sessions History"]
+    ShowSessions --> SessionChoice{"Start Fresh or Resume?"}
     
-    SessionChoice -->|Resume| LoadPast[Load Past Session History & Context]
-    SessionChoice -->|Fresh| InitFresh[Initialize New Session]
+    SessionChoice -->|Resume| LoadPast["Load Past Session History & Context"]
+    SessionChoice -->|Fresh| InitFresh["Initialize New Session"]
     
     LoadPast --> ChatLoop
     InitFresh --> ChatLoop
     
-    subgraph ChatLoop [Interactive Conversational Loop]
-        PromptUser[/User inputs question or response/] --> ProcessQuery[Agent processes message]
-        ProcessQuery --> DecideTools{Requires Tool?}
+    subgraph ChatLoop ["Interactive Conversational Loop"]
+        PromptUser[/"User inputs question or response"/] --> ProcessQuery["Agent processes message"]
+        ProcessQuery --> DecideTools{"Requires Tool?"}
         
-        DecideTools -->|Paper Details| ToolPaper[Tool: retrieve_paper_section]
-        DecideTools -->|Modern Code/Web| ToolSearch[Tool: web_search]
-        DecideTools -->|User Shares Trait| ToolProfile[Tool: update_user_profile]
-        DecideTools -->|Concept Check| ToolProgress[Tool: record_concept_progress]
-        DecideTools -->|No Tools Needed| DirectAns[Generate Direct Response]
+        DecideTools -->|"Paper Details"| ToolPaper["Tool: retrieve_paper_section"]
+        DecideTools -->|"Modern Code/Web"| ToolSearch["Tool: web_search"]
+        DecideTools -->|"User Shares Trait"| ToolProfile["Tool: update_user_profile"]
+        DecideTools -->|"Concept Check"| ToolProgress["Tool: record_concept_progress"]
+        DecideTools -->|"No Tools Needed"| DirectAns["Generate Direct Response"]
         
         ToolPaper --> FormulateResponse
         ToolSearch --> FormulateResponse
@@ -55,12 +55,12 @@ flowchart TD
         ToolProgress --> FormulateResponse
         DirectAns --> FormulateResponse
         
-        FormulateResponse[Generate Clear Answer + Socratic Clarifying Check] --> AgentOutput[/Agent prints formatted response/]
+        FormulateResponse["Generate Clear Answer + Socratic Clarifying Check"] --> AgentOutput[/"Agent prints formatted response"/]
         AgentOutput --> PromptUser
     end
     
-    PromptUser -->|User types 'exit' or 'quit'| SaveSession[Save Session State to data/sessions/]
-    SaveSession --> End([Graceful Exit])
+    PromptUser -->|"User types 'exit' or 'quit'"| SaveSession["Save Session State to data/sessions/"]
+    SaveSession --> End(["Graceful Exit"])
 ```
 
 ---
